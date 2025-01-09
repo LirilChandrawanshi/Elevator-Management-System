@@ -1,17 +1,23 @@
-# Elevator-Management-System
-This project simulates an elevator management system using Java and multi-threading. The system can manage multiple elevators, handle floor requests, and assign the nearest available elevator to a request.
+import javax.swing.*;
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
 class Elevator implements Runnable {
     private int currentFloor;
     private int targetFloor;
-    private boolean movingUp;
+    private final JLabel displayLabel;
+    private boolean moving;
 
-    public Elevator(int startFloor) {
+    public Elevator(int startFloor, JLabel displayLabel) {
         this.currentFloor = startFloor;
         this.targetFloor = startFloor;
-        this.movingUp = true;
+        this.displayLabel = displayLabel;
+        this.moving = false;
+    }
+
+    public synchronized int getCurrentFloor() {
+        return currentFloor;
     }
 
     public synchronized void moveToFloor(int floor) {
@@ -40,20 +46,34 @@ class Elevator implements Runnable {
     }
 
     private void moveUp() {
+        moving = true;
+        updateDisplay();
         currentFloor++;
-        System.out.println("Elevator moving up to floor: " + currentFloor);
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        sleep();
+        moving = false;
+        updateDisplay();
     }
 
     private void moveDown() {
+        moving = true;
+        updateDisplay();
         currentFloor--;
-        System.out.println("Elevator moving down to floor: " + currentFloor);
+        sleep();
+        moving = false;
+        updateDisplay();
+    }
+
+    private void updateDisplay() {
+        SwingUtilities.invokeLater(() -> {
+            displayLabel.setText("Floor: " + currentFloor);
+            displayLabel.setBackground(moving ? Color.YELLOW : Color.WHITE);
+            displayLabel.setOpaque(true);
+        });
+    }
+
+    private void sleep() {
         try {
-            Thread.sleep(1000);
+            Thread.sleep(1000); // Simulates the time taken to move between floors
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -63,10 +83,10 @@ class Elevator implements Runnable {
 class ElevatorController {
     private final List<Elevator> elevators;
 
-    public ElevatorController(int numElevators) {
+    public ElevatorController(int numElevators, List<JLabel> displayLabels) {
         elevators = new ArrayList<>();
         for (int i = 0; i < numElevators; i++) {
-            Elevator elevator = new Elevator(0);
+            Elevator elevator = new Elevator(0, displayLabels.get(i));
             Thread thread = new Thread(elevator);
             thread.start();
             elevators.add(elevator);
@@ -74,6 +94,10 @@ class ElevatorController {
     }
 
     public void requestElevator(int floor) {
+        if (floor < 0 || floor > 10) { // Assuming a building with 10 floors
+            JOptionPane.showMessageDialog(null, "Invalid floor number. Please enter a floor between 0 and 10.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         Elevator nearestElevator = elevators.get(0);
         for (Elevator elevator : elevators) {
             if (Math.abs(elevator.getCurrentFloor() - floor) < Math.abs(nearestElevator.getCurrentFloor() - floor)) {
@@ -86,10 +110,51 @@ class ElevatorController {
 
 public class ElevatorSystem {
     public static void main(String[] args) {
-        ElevatorController controller = new ElevatorController(3);
+        SwingUtilities.invokeLater(ElevatorSystem::createAndShowGUI);
+    }
 
-        controller.requestElevator(5);
-        controller.requestElevator(2);
-        controller.requestElevator(8);
+    private static void createAndShowGUI() {
+        JFrame frame = new JFrame("Elevator System");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 600);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new GridLayout(4, 1));
+
+        List<JLabel> elevatorLabels = new ArrayList<>();
+
+        // Add labels for elevators
+        for (int i = 0; i < 3; i++) {
+            JPanel elevatorPanel = new JPanel();
+            elevatorPanel.setLayout(new BorderLayout());
+
+            JLabel label = new JLabel("Floor: 0", SwingConstants.CENTER);
+            elevatorLabels.add(label);  // Add the label to the list
+            label.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+            label.setBackground(Color.WHITE);
+            label.setOpaque(true);
+
+            elevatorPanel.add(new JLabel("Elevator " + (i + 1), SwingConstants.CENTER), BorderLayout.NORTH);
+            elevatorPanel.add(label, BorderLayout .CENTER);
+
+            panel.add(elevatorPanel);
+        }
+
+        ElevatorController controller = new ElevatorController(3, elevatorLabels);
+
+        JPanel requestPanel = new JPanel();
+        requestPanel.setLayout(new FlowLayout());
+
+        // Create floor buttons
+        for (int i = 0; i <= 10; i++) {
+            JButton floorButton = new JButton(String.valueOf(i));
+            floorButton.addActionListener(e -> controller.requestElevator(Integer.parseInt(floorButton.getText())));
+            requestPanel.add(floorButton);
+        }
+
+        frame.add(panel, BorderLayout.CENTER);
+        frame.add(requestPanel, BorderLayout.SOUTH);
+
+        frame.setVisible(true);
     }
 }
